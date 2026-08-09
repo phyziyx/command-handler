@@ -1,5 +1,15 @@
 import test, { type TestContext } from "node:test";
-import { SlashCommandRegistry } from "./index.ts";
+import {
+  CommandRegistry,
+  CommandAliasAlreadyExistsError,
+  CommandAlreadyExistsError,
+} from "./index.ts";
+
+export class SlashCommandRegistry extends CommandRegistry {
+  constructor() {
+    super("/");
+  }
+}
 
 test("SlashCommandRegistry", (t) => {
   const slashCommandRegistry = new SlashCommandRegistry();
@@ -14,15 +24,17 @@ test("SlashCommandRegistry", (t) => {
     );
   });
 
-  t.test("add a command", (ctx: TestContext) => {
-    slashCommandRegistry.addCommand({
-      name: "help",
-      aliases: ["h"],
-      description: "Displays help information",
-      handler: () => {
-        console.log("Executing help command");
-      },
-    });
+  t.test("add a 'help' command", (ctx: TestContext) => {
+    ctx.assert.doesNotThrow(() => {
+      slashCommandRegistry.addCommand({
+        name: "help",
+        aliases: ["h"],
+        description: "Displays help information",
+        handler: () => {
+          console.log("Executing help command");
+        },
+      });
+    }, "Adding 'help' command should not throw an error");
 
     const result = slashCommandRegistry.getCommandsCount();
 
@@ -36,4 +48,61 @@ test("SlashCommandRegistry", (t) => {
       "Command 'help' should exist in the registry",
     );
   });
+
+  t.test("add the same 'help' command should throw", (ctx: TestContext) => {
+    ctx.assert.throws(
+      () => {
+        slashCommandRegistry.addCommand({
+          name: "help",
+          aliases: ["h"],
+          description: "Displays help information",
+          handler: () => {
+            console.log("Executing help command");
+          },
+        });
+      },
+      CommandAlreadyExistsError,
+      "Adding the same 'help' command should throw CommandAlreadyExistsError",
+    );
+  });
+
+  t.test(
+    "add command 'print' with a duplicated aliases",
+    (ctx: TestContext) => {
+      ctx.assert.throws(
+        () => {
+          slashCommandRegistry.addCommand({
+            name: "print",
+            aliases: ["p", "p"],
+            description: "Prints a message",
+            handler: () => {
+              console.log("Prints a message");
+            },
+          });
+        },
+        CommandAliasAlreadyExistsError,
+        "Adding command 'print' with duplicated alias 'p' should throw CommandAliasAlreadyExistsError",
+      );
+    },
+  );
+
+  t.test(
+    "add command 'list' with alias 'h' should throw",
+    (ctx: TestContext) => {
+      ctx.assert.throws(
+        () => {
+          slashCommandRegistry.addCommand({
+            name: "list",
+            aliases: ["h"],
+            description: "Displays a list of things",
+            handler: () => {
+              console.log("Executing the list of things");
+            },
+          });
+        },
+        CommandAliasAlreadyExistsError,
+        "Adding command 'list' with alias 'h' should throw CommandAliasAlreadyExistsError",
+      );
+    },
+  );
 });
