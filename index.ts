@@ -1,4 +1,4 @@
-/**
+/*
  * Command Handler
  *
  * Author: phyziyx
@@ -6,9 +6,21 @@
  * Date: 09 August 2026 20:44:00
  */
 
-type CommandPrefix = "/" | "!" | "#";
+type CommandPrefix = string;
 type CommandName = string;
-type AliasCommandName = string;
+type CommandArg = string | number | boolean | null | undefined;
+
+export class InvalidCommandNameError extends Error {
+  constructor(
+    originalCommandName: CommandName,
+    sanitisedCommandName: CommandName,
+  ) {
+    super(
+      `Invalid command name "${originalCommandName}". Sanitised command name is "${sanitisedCommandName}". Command names must start with a letter and can only contain letters and numbers.`,
+    );
+    this.name = "InvalidCommandNameError";
+  }
+}
 
 export class CommandAlreadyExistsError extends Error {
   constructor(commandName: CommandName) {
@@ -20,7 +32,7 @@ export class CommandAlreadyExistsError extends Error {
 export class CommandAliasAlreadyExistsError extends Error {
   constructor(
     commandName: CommandName,
-    alias: AliasCommandName,
+    alias: CommandName,
     existingCommandName: CommandName,
   ) {
     super(
@@ -65,20 +77,26 @@ export interface ICommandRegistry {
    * Can be used to check if a command exists in the registry.
    */
   hasCommand(commandName: CommandName): boolean;
+  /**
+   * Execute a command by name with optional arguments.
+   */
+  executeCommand(commandName: CommandName, args?: Array<CommandArg>): void;
 }
 
 export interface ICommand {
   name: CommandName;
-  aliases?: AliasCommandName[];
+  aliases?: CommandName[];
   description?: string;
   handler: (args: string[]) => void;
 }
 
-export abstract class CommandRegistry implements ICommandRegistry {
+export class CommandRegistry implements ICommandRegistry {
   private prefix: CommandPrefix;
 
   private commands: Map<CommandName, ICommand> = new Map();
   private commandAliases: Map<CommandName, CommandName> = new Map();
+
+  private validCommandNameRegex = /^[a-zA-Z][a-zA-Z0-9]*$/;
 
   constructor(prefix: CommandPrefix) {
     this.prefix = prefix;
@@ -98,7 +116,14 @@ export abstract class CommandRegistry implements ICommandRegistry {
   }
 
   public sanitiseCommandName(commandName: CommandName): CommandName {
-    return commandName.trim().toLowerCase();
+    // - Trim out all the whitespace from the command name
+    // - Convert the command name to lowercase
+    // - Return the sanitised command name
+    return commandName.replace(/\s+/g, "").toLowerCase();
+  }
+
+  public isValidCommandName(commandName: CommandName): boolean {
+    return this.validCommandNameRegex.test(commandName);
   }
 
   /**
@@ -106,67 +131,63 @@ export abstract class CommandRegistry implements ICommandRegistry {
    * @param command
    */
   public addCommand(command: ICommand): void {
-    // Validation pass
-    const commandName = this.sanitiseCommandName(command.name);
+    const isValidCommandName = this.isValidCommandName(command.name);
+    const sanitisedCommandName = this.sanitiseCommandName(command.name);
+
+    if (!isValidCommandName) {
+      throw new InvalidCommandNameError(command.name, sanitisedCommandName);
+    }
+
+    // early exit if the command already exists in the registry
+    // saves us performance and time from checking for duplicate aliases if the command already exists
+    const duplicateCommand = this.commands.get(sanitisedCommandName);
+    if (duplicateCommand) {
+      throw new CommandAlreadyExistsError(sanitisedCommandName);
+    }
 
     const hasAliases = (command.aliases?.length ?? 0) > 0;
-    if (hasAliases) {
-      command.aliases = command.aliases!.map((alias) =>
-        this.sanitiseCommandName(alias),
-      );
-    }
-
-    console.log(
-      `Adding command: ${commandName} with aliases: ${hasAliases ? command.aliases!.join(", ") : "None"}`,
-    );
-
-    //
-
-    const hasDuplicateName = this.commands.has(commandName);
-
-    if (hasDuplicateName) {
-      throw new CommandAlreadyExistsError(commandName);
-    }
-
-    //
-
-    const hasDuplicateAliasSelf =
-      hasAliases && command.aliases!.some((alias) => this.commands.has(alias));
-
-    if (hasDuplicateAliasSelf) {
-      const duplicateAlias = command.aliases!.find((alias) =>
-        this.commands.has(alias),
-      );
-      throw new CommandAliasAlreadyExistsError(
-        commandName,
-        duplicateAlias!,
-        commandName,
-      );
-    }
-
-    //
-
+    const sanitisedAliases: CommandName[] = [];
     if (hasAliases) {
       for (const alias of command.aliases!) {
-        const aliasCommandName = this.commandAliases.get(alias);
-        if (!!aliasCommandName) {
+        const isValidAlias = this.isValidCommandName(alias);
+        const sanitisedAlias = this.sanitiseCommandName(alias);
+
+        if (!isValidAlias) {
+          throw new InvalidCommandNameError(alias, sanitisedAlias);
+        }
+
+        sanitisedAliases.push(sanitisedAlias);
+      }
+    }
+
+    const joinedAliases =
+      sanitisedAliases.length > 0 ? sanitisedAliases.join(", ") : "None";
+
+    console.log(
+      `Adding command: ${sanitisedCommandName} with aliases: ${joinedAliases}`,
+    );
+
+    if (sanitisedAliases.length > 0) {
+      for (const alias of sanitisedAliases) {
+        const existingCommandName = this.commandAliases.get(alias);
+
+        if (existingCommandName) {
           throw new CommandAliasAlreadyExistsError(
-            commandName,
+            sanitisedCommandName,
             alias,
-            aliasCommandName,
+            existingCommandName,
           );
         }
-      }
 
-      command.aliases!.forEach((alias) => {
-        const sanitisedAlias = this.sanitiseCommandName(alias);
-        this.commandAliases.set(sanitisedAlias, commandName);
-      });
+        this.commandAliases.set(alias, sanitisedCommandName);
+      }
     }
 
     this.commands.set(command.name, command);
 
-    console.log(`Command "${commandName}" added successfully.`);
+    console.log(
+      `Command "${sanitisedCommandName}" added successfully with aliases "${joinedAliases}".`,
+    );
   }
 
   /**
@@ -177,5 +198,19 @@ export abstract class CommandRegistry implements ICommandRegistry {
     if (!command) {
       throw new CommandDoesNotExistError(commandName);
     }
+
+    const aliases = command.aliases ?? [];
+    aliases.forEach((alias) => {
+      this.commandAliases.delete(alias);
+    });
+
+    this.commands.delete(commandName);
   }
+
+  /**
+   * Execute a command by name with optional arguments.
+   * @param commandName
+   * @param args
+   */
+  executeCommand(commandName: CommandName, args?: Array<CommandArg>): void {}
 }

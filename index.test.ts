@@ -105,4 +105,15 @@ test("SlashCommandRegistry", (t) => {
       );
     },
   );
+
+  t.test("remove command 'help'", (ctx: TestContext) => {
+    ctx.assert.doesNotThrow(() => {
+      slashCommandRegistry.removeCommand("help");
+    }, "Removing 'help' command should not throw an error");
+
+    ctx.assert.ok(
+      !slashCommandRegistry.hasCommand("help"),
+      "Command 'help' should not exist in the registry after removal",
+    );
+  });
 });
