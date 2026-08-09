@@ -1,0 +1,19 @@
+{
+  "name": "command-handler",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "run": "node index.ts",
+    "test": "node index.test.ts"
+  },
+  "keywords": [],
+  "author": "phyziyx",
+  "license": "",
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2"
+  }
+}

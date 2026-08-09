@@ -1,0 +1,9 @@
+{
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "experimentalTernaries": true,
+  "requirePragma": false,
+  "proseWrap": "preserve",
+  "bracketSpacing": true
+}

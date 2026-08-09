@@ -1,0 +1,23 @@
+{
+	"compilerOptions": {
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"target": "ES2024",
+		"jsx": "react-jsx",
+		"checkJs": false,
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true,
+		"experimentalDecorators": false,
+		"strictNullChecks": true,
+		"strictFunctionTypes": true,
+		"strict": true,
+		"sourceMap": true,
+		"types": [
+			"node",
+		]
+	},
+	"exclude": [
+		"node_modules",
+		"**/node_modules/*"
+	]
+}
