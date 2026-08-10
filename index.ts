@@ -4,11 +4,19 @@
  * Author: phyziyx
  *
  * Date: 09 August 2026 20:44:00
+ *
+ * TODO:
+ * - Keep using Exceptions/Errors as the main way to handle errors
+ * in the command handler? OR Start using the Result pattern for error
+ * handling in the command handler?
+ * - Add support for command argument parsing and validation, which can be used
+ * for adding different argument types and validation rules for commands.
+ * - Add support for command context, which can be passed to the command handler.
  */
 
 type CommandPrefix = string;
 type CommandName = string;
-type CommandArg = string | number | boolean | null | undefined;
+type CommandArg = string;
 
 export class InvalidCommandNameError extends Error {
   constructor(
@@ -80,7 +88,7 @@ export interface ICommandRegistry {
   /**
    * Execute a command by name with optional arguments.
    */
-  executeCommand(commandName: CommandName, args?: Array<CommandArg>): void;
+  parseCommandLine(commandLine: string): boolean;
 }
 
 export interface ICommand {
@@ -212,5 +220,63 @@ export class CommandRegistry implements ICommandRegistry {
    * @param commandName
    * @param args
    */
-  executeCommand(commandName: CommandName, args?: Array<CommandArg>): void {}
+  public parseCommandLine(commandLine: string): boolean {
+    if (!commandLine.startsWith(this.prefix)) {
+      return false;
+    }
+
+    const tokens = commandLine
+      .slice(this.prefix.length)
+      .trim()
+      .split(/\s+/)
+      .filter((token) => token.length > 0);
+
+    if (tokens.length === 0) {
+      return false;
+    }
+
+    const commandName = tokens.shift();
+
+    if (!commandName) {
+      return false;
+    }
+
+    const args = tokens;
+
+    this.executeCommand(commandName, args);
+    return true;
+  }
+
+  /**
+   * Execute a command by name with optional arguments.
+   * @param commandName
+   * @param args
+   */
+  private executeCommand(
+    commandName: CommandName,
+    args?: Array<CommandArg>,
+  ): void {
+    let sanitisedCommandName = this.sanitiseCommandName(commandName);
+
+    if (!sanitisedCommandName) {
+      throw new CommandDoesNotExistError(sanitisedCommandName);
+    }
+
+    // first, check if the command is an alias
+
+    sanitisedCommandName =
+      this.commandAliases.get(sanitisedCommandName) ?? sanitisedCommandName;
+
+    // then, check if the command exists in the registry
+
+    const command = this.commands.get(sanitisedCommandName);
+
+    if (!command) {
+      throw new CommandDoesNotExistError(sanitisedCommandName);
+    }
+
+    // command is now found, we can now execute it!
+
+    command.handler(args ?? []);
+  }
 }

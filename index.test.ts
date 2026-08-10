@@ -1,3 +1,11 @@
+/*
+ * Command Handler Tests
+ *
+ * Author: phyziyx
+ *
+ * Date: 09 August 2026 20:44:00
+ */
+
 import test, { type TestContext } from "node:test";
 import {
   CommandRegistry,
@@ -116,4 +124,49 @@ test("SlashCommandRegistry", (t) => {
       "Command 'help' should not exist in the registry after removal",
     );
   });
+
+  t.test("try parsing a command", (ctx: TestContext) => {
+    slashCommandRegistry.addCommand({
+      name: "print",
+      description: "Prints a message",
+      handler: () => {
+        console.log("Prints a message");
+      },
+    });
+
+    ctx.assert.strictEqual(
+      slashCommandRegistry.parseCommandLine("faz"),
+      false,
+      "The string 'faz' is not a command and should return false",
+    );
+
+    ctx.assert.doesNotThrow(
+      () => slashCommandRegistry.parseCommandLine("/print"),
+      "Running the 'print' command with no arguments",
+    );
+
+    ctx.assert.doesNotThrow(
+      () => slashCommandRegistry.parseCommandLine("/print Hello World"),
+      "Running the 'print' command with arguments should not throw an error",
+    );
+
+    ctx.assert.throws(
+      () => slashCommandRegistry.parseCommandLine("/foo"),
+      "Running the 'foo' command which does not exist",
+    );
+
+    ctx.assert.throws(
+      () => slashCommandRegistry.parseCommandLine("/baz"),
+      "Running the 'baz' command which does not exist",
+    );
+  });
+
+  // t.test("test out a command to find a player by name", (ctx: TestContext) => {
+  //   slashCommandRegistry.addCommand({
+  //     name: "id",
+  //     aliases: ["find", "search"],
+  //     description: "Finds a player by name or player ID",
+  //     handler: (args: string[]) => {},
+  //   });
+  // });
 });
