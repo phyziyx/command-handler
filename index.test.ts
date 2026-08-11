@@ -12,7 +12,13 @@ import {
   CommandAlreadyExistsError,
 } from "./src/errors.ts";
 import { RawCommandRegistry } from "./src/raw.ts";
-import { Args, TypedCommandRegistry } from "./src/typed.ts";
+import {
+  ArgumentParser,
+  ParseResult,
+  RestParser,
+  TokenReader,
+  TypedCommandRegistry,
+} from "./src/typed.ts";
 
 export class SlashCommandRegistry extends RawCommandRegistry {
   constructor() {
@@ -168,12 +174,96 @@ test("SlashRawCommandRegistry", (t) => {
 
 const typedCommandRegistry = new TypedCommandRegistry("!");
 
+/**
+ * A mock player class for testing purposes.
+ * It simulates a player class with a name and an index.
+ */
+class MockPlayer {
+  private static players: Map<number, MockPlayer> = new Map();
+
+  constructor(
+    public readonly name: string,
+    public readonly index: number,
+  ) {
+    MockPlayer.players.set(index, this);
+  }
+
+  public static getById(index: number): MockPlayer | null {
+    return this.players.get(index) || null;
+  }
+
+  public static findByPartOfName(part: string): MockPlayer | null {
+    for (const player of this.players.values()) {
+      if (player.name.includes(part)) {
+        return player;
+      }
+    }
+
+    return null;
+  }
+}
+
+class PlayerParser extends ArgumentParser<MockPlayer> {
+  readonly usage = "<part of player name or ID>";
+
+  parse(reader: TokenReader): ParseResult<MockPlayer> {
+    const search = reader.remainingAsString();
+
+    if (!search.length) {
+      return {
+        success: false,
+        error: "Expected part of a player name or ID.",
+      };
+    }
+
+    while (!reader.eof()) {
+      reader.read();
+    }
+
+    const index = Number(search);
+
+    let player: MockPlayer | null = null;
+
+    if (Number.isInteger(index)) {
+      player = MockPlayer.getById(index);
+    }
+
+    if (!player) {
+      player = MockPlayer.findByPartOfName(search);
+    }
+
+    if (!player) {
+      return {
+        success: false,
+        error: `Player '${search}' not found.`,
+      };
+    }
+
+    return {
+      success: true,
+      value: player,
+    };
+  }
+}
+
+new MockPlayer("Alice", 1);
+new MockPlayer("Bob", 2);
+new MockPlayer("Charlie", 3);
+new MockPlayer("David", 4);
+new MockPlayer("Eve", 5);
+
+new MockPlayer("AliceTheGreat", 6);
+new MockPlayer("BobTheBuilder", 7);
+new MockPlayer("CharlieTheChampion", 8);
+new MockPlayer("DavidTheDestroyer", 9);
+new MockPlayer("EveTheEnchantress", 10);
+
 typedCommandRegistry.addCommand({
   name: "announce",
   aliases: ["ann", "broadcast"],
   description: "Broadcasts a message to all players.",
   args: {
-    message: Args.rest(),
+    message: new RestParser(),
   },
   handler: ({ message }) => {
     console.log(message);
@@ -185,8 +275,8 @@ typedCommandRegistry.addCommand({
   aliases: ["privatemsg", "dm"],
   description: "Send a private message to a player.",
   args: {
-    target: Args.player(),
-    message: Args.rest(),
+    target: new PlayerParser(),
+    message: new RestParser(),
   },
   handler: ({ target, message }) => {
     console.log(`to ${target.name}: ${message}`);

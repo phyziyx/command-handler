@@ -5,47 +5,6 @@ import {
 import { IRawCommandRegistry, RawCommandRegistry } from "./raw.ts";
 import { CommandArg, CommandName, CommandPrefix } from "./types.ts";
 
-/**
- * A mock player class for testing purposes.
- * It simulates a player class with a name and an index.
- */
-class MockPlayer {
-  private static players: Map<number, MockPlayer> = new Map();
-
-  constructor(
-    public readonly name: string,
-    public readonly index: number,
-  ) {
-    MockPlayer.players.set(index, this);
-  }
-
-  public static getById(index: number): MockPlayer | null {
-    return this.players.get(index) || null;
-  }
-
-  public static findByPartOfName(part: string): MockPlayer | null {
-    for (const player of this.players.values()) {
-      if (player.name.includes(part)) {
-        return player;
-      }
-    }
-
-    return null;
-  }
-}
-
-new MockPlayer("Alice", 1);
-new MockPlayer("Bob", 2);
-new MockPlayer("Charlie", 3);
-new MockPlayer("David", 4);
-new MockPlayer("Eve", 5);
-
-new MockPlayer("AliceTheGreat", 6);
-new MockPlayer("BobTheBuilder", 7);
-new MockPlayer("CharlieTheChampion", 8);
-new MockPlayer("DavidTheDestroyer", 9);
-new MockPlayer("EveTheEnchantress", 10);
-
 export type ParseResult<T> =
   | {
       success: true;
@@ -56,11 +15,27 @@ export type ParseResult<T> =
       error: string;
     };
 
-export interface IArgumentParser<T> {
-  parse(reader: TokenReader): ParseResult<T>;
+export type Schema = Record<string, ArgumentParser<any>>;
+
+export type InferSchema<T extends Schema> = {
+  [K in keyof T]: T[K] extends ArgumentParser<infer U> ? U : never;
+};
+
+export abstract class ArgumentParser<T> {
+  abstract readonly usage: string;
+
+  abstract parse(reader: TokenReader): ParseResult<T>;
+
+  protected success(value: T): ParseResult<T> {
+    return { success: true, value };
+  }
+
+  protected failure(error: string): ParseResult<T> {
+    return { success: false, error };
+  }
 }
 
-class TokenReader {
+export class TokenReader {
   private readonly tokens: string[];
   private index = 0;
 
@@ -97,17 +72,15 @@ class TokenReader {
   }
 }
 
-export type Schema = Record<string, IArgumentParser<any>>;
+export class NumberParser extends ArgumentParser<number> {
+  readonly usage = "<number>";
 
-export type InferSchema<T extends Schema> = {
-  [K in keyof T]: T[K] extends IArgumentParser<infer U> ? U : never;
-};
-
-class NumberParser implements IArgumentParser<number> {
   constructor(
     private readonly min?: number,
     private readonly max?: number,
-  ) {}
+  ) {
+    super();
+  }
 
   parse(reader: TokenReader): ParseResult<number> {
     const token = reader.read();
@@ -149,7 +122,9 @@ class NumberParser implements IArgumentParser<number> {
   }
 }
 
-class StringParser implements IArgumentParser<string> {
+export class StringParser extends ArgumentParser<string> {
+  readonly usage = "<string>";
+
   parse(reader: TokenReader): ParseResult<string> {
     const token = reader.read();
 
@@ -167,11 +142,15 @@ class StringParser implements IArgumentParser<string> {
   }
 }
 
-class RestParser implements IArgumentParser<string> {
+export class RestParser extends ArgumentParser<string> {
+  readonly usage = "<text...>";
+
   constructor(
     private readonly minLength?: number,
     private readonly maxLength?: number,
-  ) {}
+  ) {
+    super();
+  }
 
   parse(reader: TokenReader): ParseResult<string> {
     const value = reader.remainingAsString();
@@ -200,49 +179,13 @@ class RestParser implements IArgumentParser<string> {
   }
 }
 
-class PlayerParser implements IArgumentParser<MockPlayer> {
-  parse(reader: TokenReader): ParseResult<MockPlayer> {
-    const search = reader.remainingAsString();
+export class OptionalParser<T> extends ArgumentParser<T | undefined> {
+  readonly usage: string = "<optional (%s)>";
 
-    if (!search.length) {
-      return {
-        success: false,
-        error: "Expected part of a player name or ID.",
-      };
-    }
-
-    while (!reader.eof()) {
-      reader.read();
-    }
-
-    const index = Number(search);
-
-    let player: MockPlayer | null = null;
-
-    if (Number.isInteger(index)) {
-      player = MockPlayer.getById(index);
-    }
-
-    if (!player) {
-      player = MockPlayer.findByPartOfName(search);
-    }
-
-    if (!player) {
-      return {
-        success: false,
-        error: `Player '${search}' not found.`,
-      };
-    }
-
-    return {
-      success: true,
-      value: player,
-    };
+  constructor(private readonly inner: ArgumentParser<T>) {
+    super();
+    this.usage = this.usage.replace("%s", inner.usage);
   }
-}
-
-class OptionalParser<T> implements IArgumentParser<T | undefined> {
-  constructor(private readonly inner: IArgumentParser<T>) {}
 
   parse(reader: TokenReader): ParseResult<T | undefined> {
     const position = reader.save();
@@ -296,32 +239,6 @@ function parseSchema<S extends Schema>(
     value: values,
   };
 }
-
-export const Args = {
-  number(options?: { min?: number; max?: number }) {
-    return new NumberParser(options?.min, options?.max);
-  },
-
-  string() {
-    return new StringParser();
-  },
-
-  rest(options?: { minLength?: number; maxLength?: number }) {
-    return new RestParser(options?.minLength, options?.maxLength);
-  },
-
-  player() {
-    return new PlayerParser();
-  },
-
-  // vehicle() {
-  //   return new VehicleParser();
-  // },
-
-  optional<T>(parser: IArgumentParser<T>) {
-    return new OptionalParser(parser);
-  },
-} as const;
 
 export interface ITypedCommand<S extends Schema> {
   name: CommandName;
