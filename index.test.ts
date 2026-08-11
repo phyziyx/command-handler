@@ -8,22 +8,23 @@
 
 import test, { type TestContext } from "node:test";
 import {
-  CommandRegistry,
   CommandAliasAlreadyExistsError,
   CommandAlreadyExistsError,
-} from "./index.ts";
+} from "./src/errors.ts";
+import { RawCommandRegistry } from "./src/raw.ts";
+import { Args, TypedCommandRegistry } from "./src/typed.ts";
 
-export class SlashCommandRegistry extends CommandRegistry {
+export class SlashCommandRegistry extends RawCommandRegistry {
   constructor() {
     super("/");
   }
 }
 
-test("SlashCommandRegistry", (t) => {
-  const slashCommandRegistry = new SlashCommandRegistry();
+test("SlashRawCommandRegistry", (t) => {
+  const slashRawCommandRegistry = new SlashCommandRegistry();
 
   t.test("get prefix", (ctx: TestContext) => {
-    const result = slashCommandRegistry.getPrefix();
+    const result = slashRawCommandRegistry.getPrefix();
 
     ctx.assert.deepStrictEqual(
       result,
@@ -34,7 +35,7 @@ test("SlashCommandRegistry", (t) => {
 
   t.test("add a 'help' command", (ctx: TestContext) => {
     ctx.assert.doesNotThrow(() => {
-      slashCommandRegistry.addCommand({
+      slashRawCommandRegistry.addCommand({
         name: "help",
         aliases: ["h"],
         description: "Displays help information",
@@ -44,7 +45,7 @@ test("SlashCommandRegistry", (t) => {
       });
     }, "Adding 'help' command should not throw an error");
 
-    const result = slashCommandRegistry.getCommandsCount();
+    const result = slashRawCommandRegistry.getCommandsCount();
 
     ctx.assert.deepStrictEqual(
       result,
@@ -52,7 +53,7 @@ test("SlashCommandRegistry", (t) => {
       "Command count should be 1 after adding a command",
     );
     ctx.assert.ok(
-      slashCommandRegistry.hasCommand("help"),
+      slashRawCommandRegistry.hasCommand("help"),
       "Command 'help' should exist in the registry",
     );
   });
@@ -60,7 +61,7 @@ test("SlashCommandRegistry", (t) => {
   t.test("add the same 'help' command should throw", (ctx: TestContext) => {
     ctx.assert.throws(
       () => {
-        slashCommandRegistry.addCommand({
+        slashRawCommandRegistry.addCommand({
           name: "help",
           aliases: ["h"],
           description: "Displays help information",
@@ -79,7 +80,7 @@ test("SlashCommandRegistry", (t) => {
     (ctx: TestContext) => {
       ctx.assert.throws(
         () => {
-          slashCommandRegistry.addCommand({
+          slashRawCommandRegistry.addCommand({
             name: "print",
             aliases: ["p", "p"],
             description: "Prints a message",
@@ -99,7 +100,7 @@ test("SlashCommandRegistry", (t) => {
     (ctx: TestContext) => {
       ctx.assert.throws(
         () => {
-          slashCommandRegistry.addCommand({
+          slashRawCommandRegistry.addCommand({
             name: "list",
             aliases: ["h"],
             description: "Displays a list of things",
@@ -116,57 +117,78 @@ test("SlashCommandRegistry", (t) => {
 
   t.test("remove command 'help'", (ctx: TestContext) => {
     ctx.assert.doesNotThrow(() => {
-      slashCommandRegistry.removeCommand("help");
+      slashRawCommandRegistry.removeCommand("help");
     }, "Removing 'help' command should not throw an error");
 
     ctx.assert.ok(
-      !slashCommandRegistry.hasCommand("help"),
+      !slashRawCommandRegistry.hasCommand("help"),
       "Command 'help' should not exist in the registry after removal",
     );
   });
 
   t.test("try parsing a command", (ctx: TestContext) => {
-    slashCommandRegistry.addCommand({
+    slashRawCommandRegistry.addCommand({
       name: "print",
       description: "Prints a message",
-      handler: () => {
-        console.log("Prints a message");
+      handler: (args?: string[]) => {
+        console.log(
+          `Printing message: '${args?.join(" ")}' (${args?.length} args)`,
+        );
+        return;
       },
     });
 
     ctx.assert.strictEqual(
-      slashCommandRegistry.parseCommandLine("faz"),
+      slashRawCommandRegistry.parseCommandLine("faz"),
       false,
       "The string 'faz' is not a command and should return false",
     );
 
     ctx.assert.doesNotThrow(
-      () => slashCommandRegistry.parseCommandLine("/print"),
+      () => slashRawCommandRegistry.parseCommandLine("/print"),
       "Running the 'print' command with no arguments",
     );
 
     ctx.assert.doesNotThrow(
-      () => slashCommandRegistry.parseCommandLine("/print Hello World"),
+      () => slashRawCommandRegistry.parseCommandLine("/print Hello World"),
       "Running the 'print' command with arguments should not throw an error",
     );
 
     ctx.assert.throws(
-      () => slashCommandRegistry.parseCommandLine("/foo"),
+      () => slashRawCommandRegistry.parseCommandLine("/foo"),
       "Running the 'foo' command which does not exist",
     );
 
     ctx.assert.throws(
-      () => slashCommandRegistry.parseCommandLine("/baz"),
+      () => slashRawCommandRegistry.parseCommandLine("/baz"),
       "Running the 'baz' command which does not exist",
     );
   });
+});
 
-  // t.test("test out a command to find a player by name", (ctx: TestContext) => {
-  //   slashCommandRegistry.addCommand({
-  //     name: "id",
-  //     aliases: ["find", "search"],
-  //     description: "Finds a player by name or player ID",
-  //     handler: (args: string[]) => {},
-  //   });
-  // });
+const typedCommandRegistry = new TypedCommandRegistry("!");
+
+typedCommandRegistry.addCommand({
+  name: "announce",
+  aliases: ["ann", "broadcast"],
+  description: "Broadcasts a message to all players.",
+  args: {
+    message: Args.rest(),
+  },
+  handler: ({ message }) => {
+    console.log(message);
+  },
+});
+
+typedCommandRegistry.addCommand({
+  name: "pm",
+  aliases: ["privatemsg", "dm"],
+  description: "Send a private message to a player.",
+  args: {
+    target: Args.player(),
+    message: Args.rest(),
+  },
+  handler: ({ target, message }) => {
+    console.log(`to ${target.name}: ${message}`);
+  },
 });
