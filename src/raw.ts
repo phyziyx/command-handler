@@ -4,11 +4,17 @@ import {
   CommandDoesNotExistError,
   InvalidCommandNameError,
 } from "./errors.ts";
-import type { CommandArg, CommandName, CommandPrefix } from "./types.ts";
+import type {
+  CommandArg,
+  CommandGroup,
+  CommandName,
+  CommandPrefix,
+} from "./types.ts";
 
 export interface IRawCommand {
   name: CommandName;
   aliases?: CommandName[];
+  groups?: CommandGroup[];
   description?: string;
   handler: (args?: CommandArg[]) => void;
 }
@@ -36,7 +42,7 @@ export interface IRawCommandRegistry {
   /**
    * Get the commands count.
    */
-  getCommandsCount(): number;
+  getCommandsCount(group?: CommandGroup): number;
   /**
    * Can be used to check if a command exists in the registry.
    */
@@ -52,6 +58,7 @@ export class RawCommandRegistry implements IRawCommandRegistry {
 
   private commands: Map<CommandName, IRawCommand> = new Map();
   private commandAliases: Map<CommandName, CommandName> = new Map();
+  private commandGroups: Map<CommandGroup, CommandName[]> = new Map();
 
   private validCommandNameRegex = /^[a-zA-Z][a-zA-Z0-9]*$/;
 
@@ -63,7 +70,12 @@ export class RawCommandRegistry implements IRawCommandRegistry {
     return this.prefix;
   }
 
-  getCommandsCount(): number {
+  getCommandsCount(group?: CommandGroup): number {
+    if (!!group) {
+      const commandsInGroup = this.commandGroups.get(group);
+      return commandsInGroup?.length ?? 0;
+    }
+
     return this.commands.size;
   }
 
@@ -141,6 +153,15 @@ export class RawCommandRegistry implements IRawCommandRegistry {
     }
 
     this.commands.set(command.name, command);
+
+    // add the command to the command groups if it has any groups
+    if (!!command.groups && command.groups.length > 0) {
+      for (const group of command.groups) {
+        const existingCommandsInGroup = this.commandGroups.get(group) ?? [];
+        existingCommandsInGroup.push(sanitisedCommandName);
+        this.commandGroups.set(group, existingCommandsInGroup);
+      }
+    }
 
     // console.log(
     //   `Command "${sanitisedCommandName}" added successfully with aliases "${joinedAliases}".`,
