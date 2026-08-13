@@ -11,9 +11,7 @@ import {
   CommandAliasAlreadyExistsError,
   CommandAlreadyExistsError,
   InvalidCommandArgumentError,
-} from "./src/errors.ts";
-import { RawCommandRegistry } from "./src/raw.ts";
-import {
+  RawCommandRegistry,
   ArgumentParser,
   NumberParser,
   type ParseResult,
@@ -21,7 +19,7 @@ import {
   RestParser,
   TokenReader,
   TypedCommandRegistry,
-} from "./src/typed.ts";
+} from "./index.ts";
 
 export class SlashCommandRegistry extends RawCommandRegistry {
   constructor() {

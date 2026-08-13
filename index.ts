@@ -28,3 +28,42 @@
  * - Add support for command i18n, which can be used to provide translations for command names
  * and descriptions.
  */
+
+export {
+  CommandAliasAlreadyExistsError,
+  CommandAlreadyExistsError,
+  CommandDoesNotExistError,
+  CommandError,
+  InvalidCommandArgumentError,
+  InvalidCommandNameError,
+  UnknownCommandArgumentError,
+} from "./src/errors.ts";
+
+export {
+  type IRawCommand,
+  type IRawCommandRegistry,
+  RawCommandRegistry,
+} from "./src/raw.ts";
+
+export {
+  ArgumentParser,
+  type ITypedCommand,
+  type ITypedCommandRegistry,
+  type InferSchema,
+  parseSchema,
+  NumberParser,
+  OptionalParser,
+  type ParseResult,
+  RestParser,
+  StringParser,
+  TokenReader,
+  type Schema,
+  TypedCommandRegistry,
+} from "./src/typed.ts";
+
+export type {
+  CommandArg,
+  CommandGroup,
+  CommandName,
+  CommandPrefix,
+} from "./src/types.ts";
