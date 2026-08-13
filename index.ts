@@ -23,8 +23,6 @@
  * - Add support for command overloading, which can be used to define multiple commands with
  * the same name but different argument types.
  * - Add support for command subcommands, which can be used to define commands that have subcommands.
- * - Add support for command templates, which can be used to define commands that have a specific
- * structure and can be reused.
  * - Add support for command i18n, which can be used to provide translations for command names
  * and descriptions.
  */
