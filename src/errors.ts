@@ -1,4 +1,4 @@
-import { CommandName } from "./types.ts";
+import { type CommandName } from "./types.ts";
 
 export class CommandError extends Error {
   constructor(message: string) {

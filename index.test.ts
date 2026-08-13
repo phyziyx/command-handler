@@ -10,11 +10,14 @@ import test, { type TestContext } from "node:test";
 import {
   CommandAliasAlreadyExistsError,
   CommandAlreadyExistsError,
+  InvalidCommandArgumentError,
 } from "./src/errors.ts";
 import { RawCommandRegistry } from "./src/raw.ts";
 import {
   ArgumentParser,
-  ParseResult,
+  NumberParser,
+  type ParseResult,
+  parseSchema,
   RestParser,
   TokenReader,
   TypedCommandRegistry,
@@ -137,9 +140,9 @@ test("SlashRawCommandRegistry", (t) => {
       name: "print",
       description: "Prints a message",
       handler: (args?: string[]) => {
-        console.log(
-          `Printing message: '${args?.join(" ")}' (${args?.length} args)`,
-        );
+        // console.log(
+        //   `Printing message: '${args?.join(" ")}' (${args?.length} args)`,
+        // );
         return;
       },
     });
@@ -181,11 +184,14 @@ const typedCommandRegistry = new TypedCommandRegistry("!");
 class MockPlayer {
   private static players: Map<number, MockPlayer> = new Map();
 
-  constructor(
-    public readonly name: string,
-    public readonly index: number,
-  ) {
-    MockPlayer.players.set(index, this);
+  public readonly name: string;
+  public readonly index: number;
+
+  constructor(_name: string, _index: number) {
+    this.name = _name;
+    this.index = _index;
+
+    MockPlayer.players.set(_index, this);
   }
 
   public static getById(index: number): MockPlayer | null {
@@ -201,13 +207,33 @@ class MockPlayer {
 
     return null;
   }
+
+  public static findAllByPartOfName(part: string): MockPlayer[] {
+    const foundPlayers: MockPlayer[] = [];
+
+    for (const player of this.players.values()) {
+      if (player.name.includes(part)) {
+        foundPlayers.push(player);
+      }
+    }
+
+    return foundPlayers;
+  }
 }
 
 class PlayerParser extends ArgumentParser<MockPlayer> {
   readonly usage = "<part of player name or ID>";
 
+  private readonly whole: boolean;
+
+  constructor(_whole: boolean = false) {
+    super();
+
+    this.whole = _whole;
+  }
+
   parse(reader: TokenReader): ParseResult<MockPlayer> {
-    const search = reader.remainingAsString();
+    const search = reader.read() || "";
 
     if (!search.length) {
       return {
@@ -216,8 +242,10 @@ class PlayerParser extends ArgumentParser<MockPlayer> {
       };
     }
 
-    while (!reader.eof()) {
-      reader.read();
+    if (this.whole) {
+      while (!reader.eof()) {
+        reader.read();
+      }
     }
 
     const index = Number(search);
@@ -226,10 +254,17 @@ class PlayerParser extends ArgumentParser<MockPlayer> {
 
     if (Number.isInteger(index)) {
       player = MockPlayer.getById(index);
-    }
+    } else {
+      const players = MockPlayer.findAllByPartOfName(search);
 
-    if (!player) {
-      player = MockPlayer.findByPartOfName(search);
+      if (players.length === 1) {
+        player = players[0];
+      } else if (players.length > 1) {
+        return {
+          success: false,
+          error: `Multiple players found matching '${search}': ${players.length} players.`,
+        };
+      }
     }
 
     if (!player) {
@@ -258,27 +293,85 @@ new MockPlayer("CharlieTheChampion", 8);
 new MockPlayer("DavidTheDestroyer", 9);
 new MockPlayer("EveTheEnchantress", 10);
 
-typedCommandRegistry.addCommand({
-  name: "announce",
-  aliases: ["ann", "broadcast"],
-  description: "Broadcasts a message to all players.",
-  args: {
-    message: new RestParser(),
-  },
-  handler: ({ message }) => {
-    console.log(message);
-  },
-});
+test("TypedCommandRegistry", (t) => {
+  t.test("test rest parser", (ctx: TestContext) => {
+    const restParser = new RestParser().parse(
+      new TokenReader(["Hello", "World", "This", "Is", "A", "Test"]),
+    );
 
-typedCommandRegistry.addCommand({
-  name: "pm",
-  aliases: ["privatemsg", "dm"],
-  description: "Send a private message to a player.",
-  args: {
-    target: new PlayerParser(),
-    message: new RestParser(),
-  },
-  handler: ({ target, message }) => {
-    console.log(`to ${target.name}: ${message}`);
-  },
+    ctx.assert.deepStrictEqual(
+      restParser,
+      {
+        success: true,
+        value: "Hello World This Is A Test",
+      },
+      "RestParser should correctly parse all remaining tokens into a single string",
+    );
+  });
+
+  t.test("test number parser", (ctx: TestContext) => {
+    const numberParser = new NumberParser(1, 10).parse(new TokenReader(["5"]));
+
+    ctx.assert.deepStrictEqual(
+      numberParser,
+      { success: true, value: 5 },
+      "NumberParser should correctly parse a valid number within the specified range",
+    );
+  });
+
+  t.test("test player parser", (ctx: TestContext) => {
+    const playerParser = new PlayerParser().parse(
+      new TokenReader(["AliceTheGreat"]),
+    );
+
+    ctx.assert.deepStrictEqual(
+      playerParser,
+      { success: true, value: MockPlayer.getById(6) },
+      "PlayerParser should correctly find a player by name",
+    );
+  });
+
+  t.test("test player parser with ID", (ctx: TestContext) => {
+    const playerParser = new PlayerParser().parse(new TokenReader(["3"]));
+
+    ctx.assert.deepStrictEqual(
+      playerParser,
+      { success: true, value: MockPlayer.getById(3) },
+      "PlayerParser should correctly find a player by ID",
+    );
+  });
+
+  t.test("test player parser with rest parser", (ctx: TestContext) => {
+    const args = {
+      player: new PlayerParser(),
+      message: new RestParser(),
+    };
+
+    ctx.assert.throws(
+      () => parseSchema(args, ["Bob", "Hello", "World"]),
+      InvalidCommandArgumentError,
+      "Should throw an error due to multiple players found matching 'Bob'",
+    );
+  });
+
+  t.test("add a command with a player and rest parser", (ctx: TestContext) => {
+    ctx.assert.doesNotThrow(() => {
+      typedCommandRegistry.addCommand({
+        name: "greet",
+        args: {
+          player: new PlayerParser(),
+          message: new RestParser(),
+        },
+        description: "Greets a player with a message",
+        handler: (args) => {
+          const player = args.player;
+          const message = args.message;
+
+          console.log(
+            `Greeting ${player.name} (ID: ${player.index}) with message: "${message}"`,
+          );
+        },
+      });
+    });
+  });
 });

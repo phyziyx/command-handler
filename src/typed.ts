@@ -2,8 +2,8 @@ import {
   InvalidCommandArgumentError,
   UnknownCommandArgumentError,
 } from "./errors.ts";
-import { IRawCommandRegistry, RawCommandRegistry } from "./raw.ts";
-import { CommandArg, CommandName, CommandPrefix } from "./types.ts";
+import { type IRawCommandRegistry, RawCommandRegistry } from "./raw.ts";
+import type { CommandArg, CommandName, CommandPrefix } from "./types.ts";
 
 export type ParseResult<T> =
   | {
@@ -75,11 +75,14 @@ export class TokenReader {
 export class NumberParser extends ArgumentParser<number> {
   readonly usage = "<number>";
 
-  constructor(
-    private readonly min?: number,
-    private readonly max?: number,
-  ) {
+  private readonly min?: number;
+  private readonly max?: number;
+
+  constructor(min?: number, max?: number) {
     super();
+
+    this.min = min;
+    this.max = max;
   }
 
   parse(reader: TokenReader): ParseResult<number> {
@@ -145,11 +148,14 @@ export class StringParser extends ArgumentParser<string> {
 export class RestParser extends ArgumentParser<string> {
   readonly usage = "<text...>";
 
-  constructor(
-    private readonly minLength?: number,
-    private readonly maxLength?: number,
-  ) {
+  private readonly minLength?: number;
+  private readonly maxLength?: number;
+
+  constructor(_minLength?: number, _maxLength?: number) {
     super();
+
+    this.minLength = _minLength;
+    this.maxLength = _maxLength;
   }
 
   parse(reader: TokenReader): ParseResult<string> {
@@ -182,9 +188,13 @@ export class RestParser extends ArgumentParser<string> {
 export class OptionalParser<T> extends ArgumentParser<T | undefined> {
   readonly usage: string = "<optional (%s)>";
 
-  constructor(private readonly inner: ArgumentParser<T>) {
+  private readonly inner: ArgumentParser<T>;
+
+  constructor(_inner: ArgumentParser<T>) {
     super();
-    this.usage = this.usage.replace("%s", inner.usage);
+
+    this.inner = _inner;
+    this.usage = this.usage.replace("%s", _inner.usage);
   }
 
   parse(reader: TokenReader): ParseResult<T | undefined> {
@@ -205,7 +215,7 @@ export class OptionalParser<T> extends ArgumentParser<T | undefined> {
   }
 }
 
-function parseSchema<S extends Schema>(
+export function parseSchema<S extends Schema>(
   schema: S,
   tokens: string[],
 ): ParseResult<InferSchema<S>> {
@@ -285,12 +295,12 @@ export interface ITypedCommandRegistry {
 export class TypedCommandRegistry implements ITypedCommandRegistry {
   private rawRegistry: IRawCommandRegistry;
 
-  constructor(private readonly prefix: CommandPrefix) {
-    this.rawRegistry = new RawCommandRegistry(prefix);
+  constructor(_prefix: CommandPrefix) {
+    this.rawRegistry = new RawCommandRegistry(_prefix);
   }
 
   getPrefix(): CommandPrefix {
-    return this.prefix;
+    return this.getPrefix();
   }
 
   getCommandsCount(): number {

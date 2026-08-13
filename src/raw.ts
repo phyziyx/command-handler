@@ -4,7 +4,7 @@ import {
   CommandDoesNotExistError,
   InvalidCommandNameError,
 } from "./errors.ts";
-import { CommandArg, CommandName, CommandPrefix } from "./types.ts";
+import type { CommandArg, CommandName, CommandPrefix } from "./types.ts";
 
 export interface IRawCommand {
   name: CommandName;
@@ -120,9 +120,9 @@ export class RawCommandRegistry implements IRawCommandRegistry {
     const joinedAliases =
       sanitisedAliases.length > 0 ? sanitisedAliases.join(", ") : "None";
 
-    console.log(
-      `Adding command: ${sanitisedCommandName} with aliases: ${joinedAliases}`,
-    );
+    // console.log(
+    //   `Adding command: ${sanitisedCommandName} with aliases: ${joinedAliases}`,
+    // );
 
     if (sanitisedAliases.length > 0) {
       for (const alias of sanitisedAliases) {
@@ -142,9 +142,9 @@ export class RawCommandRegistry implements IRawCommandRegistry {
 
     this.commands.set(command.name, command);
 
-    console.log(
-      `Command "${sanitisedCommandName}" added successfully with aliases "${joinedAliases}".`,
-    );
+    // console.log(
+    //   `Command "${sanitisedCommandName}" added successfully with aliases "${joinedAliases}".`,
+    // );
   }
 
   /**
