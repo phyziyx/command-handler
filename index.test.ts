@@ -15,11 +15,11 @@ import {
   ArgumentParser,
   NumberParser,
   type ParseResult,
-  parseSchema,
   RestParser,
   TokenReader,
   TypedCommandRegistry,
 } from "./index.ts";
+import { DefaultSyntaxGenerator } from "./src/typed.ts";
 
 export class SlashCommandRegistry extends RawCommandRegistry {
   constructor() {
@@ -62,6 +62,11 @@ test("SlashRawCommandRegistry", (t) => {
     ctx.assert.ok(
       slashRawCommandRegistry.hasCommand("help"),
       "Command 'help' should exist in the registry",
+    );
+
+    ctx.assert.ok(
+      slashRawCommandRegistry.parseCommandLine("/h"),
+      "Command '/h' alias should execute correctly",
     );
   });
 
@@ -173,7 +178,8 @@ test("SlashRawCommandRegistry", (t) => {
   });
 });
 
-const typedCommandRegistry = new TypedCommandRegistry("!");
+const syntaxGenerator = new DefaultSyntaxGenerator();
+const typedCommandRegistry = new TypedCommandRegistry("!", syntaxGenerator);
 
 /**
  * A mock player class for testing purposes.
@@ -291,23 +297,63 @@ new MockPlayer("CharlieTheChampion", 8);
 new MockPlayer("DavidTheDestroyer", 9);
 new MockPlayer("EveTheEnchantress", 10);
 
-test("TypedCommandRegistry", (t) => {
-  t.test("test rest parser", (ctx: TestContext) => {
-    const restParser = new RestParser().parse(
-      new TokenReader(["Hello", "World", "This", "Is", "A", "Test"]),
-    );
+test("NumberParser", (t) => {
+  t.test("test number parser", (ctx: TestContext) => {
+    const numberParser = new NumberParser();
 
     ctx.assert.deepStrictEqual(
-      restParser,
-      {
-        success: true,
-        value: "Hello World This Is A Test",
-      },
-      "RestParser should correctly parse all remaining tokens into a single string",
+      numberParser.parse(new TokenReader([""])),
+      { success: false, error: "Expected number." },
+      "NumberParser should correctly fail when no argument is provided",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["   "])),
+      { success: false, error: "Expected number." },
+      "NumberParser should correctly fail when whitespace is provided",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["5"])),
+      { success: true, value: 5 },
+      "NumberParser should correctly parse a valid number within the specified range",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["-11"])),
+      { success: true, value: -11 },
+      "NumberParser should correctly parse a negative number",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["0"])),
+      { success: true, value: 0 },
+      "NumberParser should correctly parse zero",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["-0"])),
+      { success: true, value: -0 },
+      "NumberParser should correctly parse negative zero",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["5.5"])),
+      { success: true, value: 5.5 },
+      "NumberParser should correctly parse a decimal value",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["abc"])),
+      { success: false, error: "'abc' is not a number." },
+      "NumberParser should fail when a string is provided",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["abc 123"])),
+      { success: false, error: "'abc 123' is not a number." },
+      "NumberParser should fail when a alphanumeric string is provided",
+    );
+    ctx.assert.deepStrictEqual(
+      numberParser.parse(new TokenReader(["999999999999999"])),
+      { success: true, value: 999999999999999 },
+      "NumberParser should parse a very large value ",
     );
   });
 
-  t.test("test number parser", (ctx: TestContext) => {
+  t.test("test number parser within range", (ctx: TestContext) => {
     const numberParser = new NumberParser(1, 10).parse(new TokenReader(["5"]));
 
     ctx.assert.deepStrictEqual(
@@ -317,6 +363,140 @@ test("TypedCommandRegistry", (t) => {
     );
   });
 
+  t.test("test number parser outside of range", (ctx: TestContext) => {
+    const numberParser = new NumberParser(1, 10).parse(
+      new TokenReader(["-11"]),
+    );
+
+    ctx.assert.deepStrictEqual(
+      numberParser,
+      { success: false, error: "Number must be at least 1." },
+      "NumberParser should correctly parse a valid number within the specified range",
+    );
+  });
+});
+
+test("SyntaxGenerator", (t) => {
+  t.test("test syntax generator output", (ctx: TestContext) => {
+    ctx.assert.strictEqual(
+      syntaxGenerator.generate({
+        name: "greet",
+        args: {
+          player: new PlayerParser(),
+          message: new RestParser(),
+        },
+        description: "Greets a player with a message",
+        handler: () => {},
+      }),
+      "<part of player name or ID> <text...>",
+      "SyntaxGenerator should generate the correct syntax for the specified command",
+    );
+  });
+
+  // TODO: add a test for a command with no args?
+});
+
+test("RestParser", (t) => {
+  const restParser = new RestParser();
+
+  t.test("test multiple word tokens", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      restParser.parse(
+        new TokenReader(["Hello", "World", "This", "Is", "A", "Test"]),
+      ),
+      {
+        success: true,
+        value: "Hello World This Is A Test",
+      },
+      "RestParser should correctly parse all remaining tokens into a single string",
+    );
+  });
+
+  t.test("test an empty array of tokens", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      restParser.parse(new TokenReader([])),
+      {
+        success: true,
+        value: "",
+      },
+      "RestParser should correctly parse an empty array of tokens",
+    );
+  });
+
+  t.test("test an array of empty token", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      restParser.parse(new TokenReader([""])),
+      {
+        success: true,
+        value: "",
+      },
+      "RestParser should correctly parse an empty token",
+    );
+  });
+
+  t.test("test whitespace token", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      restParser.parse(new TokenReader([" "])),
+      {
+        success: true,
+        value: " ",
+      },
+      "RestParser should correctly parse single whitespace token",
+    );
+  });
+
+  t.test("test multi-whitespace token", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      restParser.parse(new TokenReader(["   "])),
+      {
+        success: true,
+        value: "   ",
+      },
+      "RestParser should correctly parse multi-whitespace token",
+    );
+  });
+
+  t.test("test single token", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      restParser.parse(new TokenReader(["World"])),
+      {
+        success: true,
+        value: "World",
+      },
+      "RestParser should correctly parse a single token",
+    );
+  });
+});
+
+test("PlayerParser", (t) => {
+  const playerParser = new PlayerParser();
+
+  t.test("test player parser with partial name match", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      playerParser.parse(new TokenReader(["AliceT"])),
+      { success: true, value: MockPlayer.getById(6) },
+      "PlayerParser should correctly find a player by name",
+    );
+  });
+
+  t.test("test player parser with exact match", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      playerParser.parse(new TokenReader(["AliceTheGreat"])),
+      { success: true, value: MockPlayer.getById(6) },
+      "PlayerParser should correctly find a player by name",
+    );
+  });
+
+  t.test("test player parser with ID", (ctx: TestContext) => {
+    ctx.assert.deepStrictEqual(
+      playerParser.parse(new TokenReader(["3"])),
+      { success: true, value: MockPlayer.getById(3) },
+      "PlayerParser should correctly find a player by ID",
+    );
+  });
+});
+
+test("TypedCommandRegistry", (t) => {
   t.test("test player parser", (ctx: TestContext) => {
     const playerParser = new PlayerParser().parse(
       new TokenReader(["AliceTheGreat"]),
@@ -339,37 +519,57 @@ test("TypedCommandRegistry", (t) => {
     );
   });
 
-  t.test("test player parser with rest parser", (ctx: TestContext) => {
-    const args = {
-      player: new PlayerParser(),
-      message: new RestParser(),
-    };
+  t.test(
+    "add a command with a player and rest parser and ensure correct arguments are received",
+    (ctx: TestContext) => {
+      let called = false;
 
-    ctx.assert.throws(
-      () => parseSchema(args, ["Bob", "Hello", "World"]),
-      InvalidCommandArgumentError,
-      "Should throw an error due to multiple players found matching 'Bob'",
-    );
-  });
+      let player: null | MockPlayer = null;
+      let message: null | string = null;
 
-  t.test("add a command with a player and rest parser", (ctx: TestContext) => {
-    ctx.assert.doesNotThrow(() => {
-      typedCommandRegistry.addCommand({
-        name: "greet",
-        args: {
-          player: new PlayerParser(),
-          message: new RestParser(),
-        },
-        description: "Greets a player with a message",
-        handler: (args) => {
-          const player = args.player;
-          const message = args.message;
+      ctx.assert.doesNotThrow(() => {
+        typedCommandRegistry.addCommand({
+          name: "greet",
+          args: {
+            player: new PlayerParser(),
+            message: new RestParser(),
+          },
+          description: "Greets a player with a message",
+          handler: (args) => {
+            player = args.player;
+            message = args.message;
 
-          console.log(
-            `Greeting ${player.name} (ID: ${player.index}) with message: "${message}"`,
-          );
-        },
+            called = true;
+
+            console.log(
+              `Greeting ${player.name} (ID: ${player.index}) with message: "${message}"`,
+            );
+          },
+        });
       });
-    });
-  });
+
+      ctx.assert.deepEqual(
+        typedCommandRegistry.parseCommandLine("!greet AliceT Hello there!"),
+        true,
+        "The 'greet' command should be parsed successfully",
+      );
+
+      ctx.assert.deepEqual(
+        called,
+        true,
+        "The handler for the 'greet' command should have been called",
+      );
+
+      ctx.assert.deepEqual(
+        player,
+        MockPlayer.getById(6),
+        "The player argument should be AliceTheGreat (ID: 6)",
+      );
+      ctx.assert.deepEqual(
+        message,
+        "Hello there!",
+        "The message argument should be 'Hello there!'",
+      );
+    },
+  );
 });

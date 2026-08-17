@@ -48,6 +48,7 @@ export class TokenReader {
   }
 
   public read(): string | undefined {
+    if (this.eof()) return undefined;
     return this.tokens[this.index++];
   }
 
@@ -86,7 +87,7 @@ export class NumberParser extends ArgumentParser<number> {
   }
 
   parse(reader: TokenReader): ParseResult<number> {
-    const token = reader.read();
+    const token = reader.read()?.trim();
 
     if (!token) {
       return {
@@ -229,19 +230,19 @@ export function parseSchema<S extends Schema>(
     const result = parser.parse(reader);
 
     if (!result.success) {
-      throw new InvalidCommandArgumentError(key, result.error);
-      // return result;
+      // throw new InvalidCommandArgumentError(key, result.error);
+      return result;
     }
 
     values[key] = result.value;
   }
 
   if (!reader.eof()) {
-    throw new UnknownCommandArgumentError(reader.read() ?? "<UNKNOWN>");
-    // return {
-    //   success: false,
-    //   error: `Unexpected argument '${reader.read()}'.`,
-    // };
+    // throw new UnknownCommandArgumentError(reader.read() ?? "<UNKNOWN>");
+    return {
+      success: false,
+      error: `Unexpected argument '${reader.read() ?? "<UNKNOWN>"}'.`,
+    };
   }
 
   return {
@@ -292,15 +293,31 @@ export interface ITypedCommandRegistry {
   parseCommandLine(commandLine: string): boolean;
 }
 
+export interface ISyntaxGenerator {
+  generate<S extends Schema>(command: ITypedCommand<S>): string;
+}
+
+export class DefaultSyntaxGenerator implements ISyntaxGenerator {
+  generate<S extends Schema>(command: ITypedCommand<S>): string {
+    if (!command.args) return "";
+
+    return Object.keys(command.args)
+      .map((k) => command.args![k].usage)
+      .join(" ");
+  }
+}
+
 export class TypedCommandRegistry implements ITypedCommandRegistry {
   private rawRegistry: IRawCommandRegistry;
+  private syntaxGenerator: ISyntaxGenerator;
 
-  constructor(_prefix: CommandPrefix) {
+  constructor(_prefix: CommandPrefix, syntaxGenerator?: ISyntaxGenerator) {
     this.rawRegistry = new RawCommandRegistry(_prefix);
+    this.syntaxGenerator = syntaxGenerator ?? new DefaultSyntaxGenerator();
   }
 
   getPrefix(): CommandPrefix {
-    return this.getPrefix();
+    return this.rawRegistry.getPrefix();
   }
 
   getCommandsCount(): number {
@@ -323,6 +340,7 @@ export class TypedCommandRegistry implements ITypedCommandRegistry {
     this.rawRegistry.addCommand({
       name: command.name,
       aliases: command.aliases,
+      syntax: this.syntaxGenerator.generate(command),
       description: command.description,
       handler: (args?: CommandArg[]) => {
         const result = parseSchema(command.args, args ?? []);

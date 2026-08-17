@@ -13,6 +13,7 @@ import type {
 
 export interface IRawCommand {
   name: CommandName;
+  syntax?: string;
   aliases?: CommandName[];
   groups?: CommandGroup[];
   description?: string;
