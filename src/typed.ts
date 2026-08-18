@@ -1,7 +1,3 @@
-import {
-  InvalidCommandArgumentError,
-  UnknownCommandArgumentError,
-} from "./errors.ts";
 import { type IRawCommandRegistry, RawCommandRegistry } from "./raw.ts";
 import type { CommandArg, CommandName, CommandPrefix } from "./types.ts";
 
@@ -251,20 +247,29 @@ export function parseSchema<S extends Schema>(
   };
 }
 
-export interface ITypedCommand<S extends Schema> {
-  name: CommandName;
-  aliases?: CommandName[];
-  args: S;
-  description?: string;
-  handler: (args: InferSchema<S>) => void;
-}
+export type ITypedCommand<S extends Schema | undefined = undefined> =
+  S extends Schema ?
+    {
+      name: CommandName;
+      aliases?: CommandName[];
+      args: S;
+      description?: string;
+      handler: (args: InferSchema<S>) => void;
+    }
+  : {
+      name: CommandName;
+      aliases?: CommandName[];
+      args?: undefined;
+      description?: string;
+      handler: () => void;
+    };
 
 export interface ITypedCommandRegistry {
   /**
    * Add a command to the registry.
    * @param command
    */
-  addCommand<S extends Schema>(command: ITypedCommand<S>): void;
+  addCommand<S extends Schema | undefined>(command: ITypedCommand<S>): void;
   /**
    * Remove a command from the registry.
    * @param command
@@ -294,11 +299,11 @@ export interface ITypedCommandRegistry {
 }
 
 export interface ISyntaxGenerator {
-  generate<S extends Schema>(command: ITypedCommand<S>): string;
+  generate<S extends Schema | undefined>(command: ITypedCommand<S>): string;
 }
 
 export class DefaultSyntaxGenerator implements ISyntaxGenerator {
-  generate<S extends Schema>(command: ITypedCommand<S>): string {
+  generate<S extends Schema | undefined>(command: ITypedCommand<S>): string {
     if (!command.args) return "";
 
     return Object.keys(command.args)
@@ -336,13 +341,20 @@ export class TypedCommandRegistry implements ITypedCommandRegistry {
    * Add a command to the registry.
    * @param command
    */
-  public addCommand<S extends Schema>(command: ITypedCommand<S>): void {
+  public addCommand<S extends Schema | undefined>(
+    command: ITypedCommand<S>,
+  ): void {
     this.rawRegistry.addCommand({
       name: command.name,
       aliases: command.aliases,
       syntax: this.syntaxGenerator.generate(command),
       description: command.description,
       handler: (args?: CommandArg[]) => {
+        if (!command.args) {
+          command.handler();
+          return;
+        }
+
         const result = parseSchema(command.args, args ?? []);
 
         if (!result.success) {

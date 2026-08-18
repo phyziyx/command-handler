@@ -386,14 +386,24 @@ test("SyntaxGenerator", (t) => {
           message: new RestParser(),
         },
         description: "Greets a player with a message",
-        handler: () => {},
+        handler: (_args) => {},
       }),
       "<part of player name or ID> <text...>",
       "SyntaxGenerator should generate the correct syntax for the specified command",
     );
   });
 
-  // TODO: add a test for a command with no args?
+  t.test("test syntax generator output", (ctx: TestContext) => {
+    ctx.assert.strictEqual(
+      syntaxGenerator.generate({
+        name: "nothing",
+        description: "This command does nothing",
+        handler: () => {},
+      }),
+      "",
+      "SyntaxGenerator should generate the correct empty syntax for the specified command",
+    );
+  });
 });
 
 test("RestParser", (t) => {
@@ -497,27 +507,28 @@ test("PlayerParser", (t) => {
 });
 
 test("TypedCommandRegistry", (t) => {
-  t.test("test player parser", (ctx: TestContext) => {
-    const playerParser = new PlayerParser().parse(
-      new TokenReader(["AliceTheGreat"]),
-    );
+  t.test(
+    "add a command with no arguments and ensure it is called",
+    (ctx: TestContext) => {
+      let called = false;
 
-    ctx.assert.deepStrictEqual(
-      playerParser,
-      { success: true, value: MockPlayer.getById(6) },
-      "PlayerParser should correctly find a player by name",
-    );
-  });
+      ctx.assert.doesNotThrow(() => {
+        typedCommandRegistry.addCommand({
+          name: "noargs",
+          description: "A command with no arguments",
+          handler: () => {
+            called = true;
+          },
+        });
+      });
 
-  t.test("test player parser with ID", (ctx: TestContext) => {
-    const playerParser = new PlayerParser().parse(new TokenReader(["3"]));
-
-    ctx.assert.deepStrictEqual(
-      playerParser,
-      { success: true, value: MockPlayer.getById(3) },
-      "PlayerParser should correctly find a player by ID",
-    );
-  });
+      ctx.assert.deepEqual(
+        typedCommandRegistry.parseCommandLine("!noargs 123"),
+        true,
+        "The 'noargs' command should be parsed successfully",
+      );
+    },
+  );
 
   t.test(
     "add a command with a player and rest parser and ensure correct arguments are received",
@@ -541,9 +552,9 @@ test("TypedCommandRegistry", (t) => {
 
             called = true;
 
-            console.log(
-              `Greeting ${player.name} (ID: ${player.index}) with message: "${message}"`,
-            );
+            // console.log(
+            //   `Greeting ${player.name} (ID: ${player.index}) with message: "${message}"`,
+            // );
           },
         });
       });
