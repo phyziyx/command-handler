@@ -10,7 +10,6 @@ import test, { type TestContext } from "node:test";
 import {
   CommandAliasAlreadyExistsError,
   CommandAlreadyExistsError,
-  InvalidCommandArgumentError,
   RawCommandRegistry,
   ArgumentParser,
   NumberParser,
@@ -19,7 +18,11 @@ import {
   TokenReader,
   TypedCommandRegistry,
 } from "./index.ts";
-import { DefaultSyntaxGenerator } from "./src/typed.ts";
+import {
+  DefaultSyntaxGenerator,
+  OptionalParser,
+  StringParser,
+} from "./src/typed.ts";
 
 export class SlashCommandRegistry extends RawCommandRegistry {
   constructor() {
@@ -297,6 +300,52 @@ new MockPlayer("CharlieTheChampion", 8);
 new MockPlayer("DavidTheDestroyer", 9);
 new MockPlayer("EveTheEnchantress", 10);
 
+test("SyntaxGenerator", (t) => {
+  t.test("test syntax generator output", (ctx: TestContext) => {
+    ctx.assert.strictEqual(
+      syntaxGenerator.generate({
+        name: "greet",
+        args: {
+          player: new PlayerParser(),
+          message: new RestParser(),
+        },
+        description: "Greets a player with a message",
+        handler: (_args) => {},
+      }),
+      "<part of player name or ID> <text...>",
+      "SyntaxGenerator should generate the correct syntax for the specified command",
+    );
+  });
+
+  t.test("test syntax generator output", (ctx: TestContext) => {
+    ctx.assert.strictEqual(
+      syntaxGenerator.generate({
+        name: "warn",
+        description: "Warn the player",
+        args: {
+          player: new PlayerParser(),
+          reason: new OptionalParser(new RestParser()),
+        },
+        handler: () => {},
+      }),
+      "<part of player name or ID> <optional (<text...>)>",
+      "SyntaxGenerator should generate the correct syntax for the specified command",
+    );
+  });
+
+  t.test("test syntax generator output", (ctx: TestContext) => {
+    ctx.assert.strictEqual(
+      syntaxGenerator.generate({
+        name: "nothing",
+        description: "This command does nothing",
+        handler: () => {},
+      }),
+      "",
+      "SyntaxGenerator should generate the correct empty syntax for the specified command",
+    );
+  });
+});
+
 test("NumberParser", (t) => {
   t.test("test number parser", (ctx: TestContext) => {
     const numberParser = new NumberParser();
@@ -376,32 +425,16 @@ test("NumberParser", (t) => {
   });
 });
 
-test("SyntaxGenerator", (t) => {
-  t.test("test syntax generator output", (ctx: TestContext) => {
-    ctx.assert.strictEqual(
-      syntaxGenerator.generate({
-        name: "greet",
-        args: {
-          player: new PlayerParser(),
-          message: new RestParser(),
-        },
-        description: "Greets a player with a message",
-        handler: (_args) => {},
-      }),
-      "<part of player name or ID> <text...>",
-      "SyntaxGenerator should generate the correct syntax for the specified command",
+test("StringParser", (t) => {
+  t.test("test string parser", (ctx: TestContext) => {
+    const stringParser = new StringParser().parse(
+      new TokenReader(["string", "parser", "test"]),
     );
-  });
 
-  t.test("test syntax generator output", (ctx: TestContext) => {
-    ctx.assert.strictEqual(
-      syntaxGenerator.generate({
-        name: "nothing",
-        description: "This command does nothing",
-        handler: () => {},
-      }),
-      "",
-      "SyntaxGenerator should generate the correct empty syntax for the specified command",
+    ctx.assert.deepStrictEqual(
+      stringParser,
+      { success: true, value: "string" },
+      "NumberParser should correctly parse the first token as a string",
     );
   });
 });
@@ -478,6 +511,54 @@ test("RestParser", (t) => {
   });
 });
 
+test("OptionalParser", (t) => {
+  t.test("test optional parser with a provided value", (ctx: TestContext) => {
+    const optionalParser = new OptionalParser(new StringParser());
+
+    ctx.assert.deepStrictEqual(
+      optionalParser.parse(new TokenReader(["Hello"])),
+      { success: true, value: "Hello" },
+      "OptionalParser should correctly parse a provided value",
+    );
+  });
+
+  t.test("test optional parser with no provided value", (ctx: TestContext) => {
+    const optionalParser = new OptionalParser(new StringParser());
+
+    ctx.assert.deepStrictEqual(
+      optionalParser.parse(new TokenReader([])),
+      { success: true, value: undefined },
+      "OptionalParser should correctly return undefined when no value is provided",
+    );
+  });
+
+  t.test(
+    "test optional parser with rest parser provided no value",
+    (ctx: TestContext) => {
+      const optionalParser = new OptionalParser(new RestParser());
+
+      ctx.assert.deepStrictEqual(
+        optionalParser.parse(new TokenReader([])),
+        { success: true, value: undefined },
+        "OptionalParser should correctly return empty undefined when no value is provided",
+      );
+    },
+  );
+
+  t.test(
+    "test optional parser with rest parser provided some value",
+    (ctx: TestContext) => {
+      const optionalParser = new OptionalParser(new RestParser());
+
+      ctx.assert.deepStrictEqual(
+        optionalParser.parse(new TokenReader(["hello", "world"])),
+        { success: true, value: "hello world" },
+        "OptionalParser should correctly return the value when one is provided",
+      );
+    },
+  );
+});
+
 test("PlayerParser", (t) => {
   const playerParser = new PlayerParser();
 
@@ -530,6 +611,41 @@ test("TypedCommandRegistry", (t) => {
     },
   );
 
+  // TODO: complete this test implementation
+
+  // t.test(
+  //   "add a command with incorrect argument order and ensure it fails",
+  //   (ctx: TestContext) => {
+  //     let called = false;
+
+  //     let player: null | MockPlayer = null;
+  //     let message: null | string = null;
+
+  //     ctx.assert.doesNotThrow(() => {
+  //       typedCommandRegistry.addCommand({
+  //         name: "invalidargorder",
+  //         args: {
+  //           message: new RestParser(),
+  //           player: new PlayerParser(),
+  //         },
+  //         description: "A command with invalid argument order",
+  //         handler: (args) => {
+  //           player = args.player;
+  //           message = args.message;
+
+  //           called = false;
+  //         },
+  //       });
+  //     });
+
+  //     ctx.assert.throws(() => {
+  //       typedCommandRegistry.parseCommandLine(
+  //         "!invalidargorder AliceT Hello there!",
+  //       );
+  //     }, "The 'invalidargorder' command should fail to parse due to incorrect argument order");
+  //   },
+  // );
+
   t.test(
     "add a command with a player and rest parser and ensure correct arguments are received",
     (ctx: TestContext) => {
@@ -576,6 +692,7 @@ test("TypedCommandRegistry", (t) => {
         MockPlayer.getById(6),
         "The player argument should be AliceTheGreat (ID: 6)",
       );
+
       ctx.assert.deepEqual(
         message,
         "Hello there!",

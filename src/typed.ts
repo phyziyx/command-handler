@@ -86,39 +86,20 @@ export class NumberParser extends ArgumentParser<number> {
     const token = reader.read()?.trim();
 
     if (!token) {
-      return {
-        success: false,
-        error: "Expected number.",
-      };
+      return this.failure("Expected number.");
     }
 
     const value = Number(token);
 
     if (!Number.isFinite(value)) {
-      return {
-        success: false,
-        error: `'${token}' is not a number.`,
-      };
+      return this.failure(`'${token}' is not a number.`);
+    } else if (this.min !== undefined && value < this.min) {
+      return this.failure(`Number must be at least ${this.min}.`);
+    } else if (this.max !== undefined && value > this.max) {
+      return this.failure(`Number must be at most ${this.max}.`);
     }
 
-    if (this.min !== undefined && value < this.min) {
-      return {
-        success: false,
-        error: `Number must be at least ${this.min}.`,
-      };
-    }
-
-    if (this.max !== undefined && value > this.max) {
-      return {
-        success: false,
-        error: `Number must be at most ${this.max}.`,
-      };
-    }
-
-    return {
-      success: true,
-      value,
-    };
+    return this.success(value);
   }
 }
 
@@ -129,16 +110,10 @@ export class StringParser extends ArgumentParser<string> {
     const token = reader.read();
 
     if (!token) {
-      return {
-        success: false,
-        error: "Expected text.",
-      };
+      return this.failure("Expected text.");
     }
 
-    return {
-      success: true,
-      value: token,
-    };
+    return this.success(token);
   }
 }
 
@@ -164,21 +139,16 @@ export class RestParser extends ArgumentParser<string> {
 
     let length = value.length;
     if (this.minLength !== undefined && length < this.minLength) {
-      return {
-        success: false,
-        error: `Text must be at least ${this.minLength} characters long.`,
-      };
+      return this.failure(
+        `Text must be at least ${this.minLength} characters long.`,
+      );
     } else if (this.maxLength !== undefined && length > this.maxLength) {
-      return {
-        success: false,
-        error: `Text must be at most ${this.maxLength} characters long.`,
-      };
+      return this.failure(
+        `Text must be at most ${this.maxLength} characters long.`,
+      );
     }
 
-    return {
-      success: true,
-      value,
-    };
+    return this.success(value);
   }
 }
 
@@ -195,6 +165,10 @@ export class OptionalParser<T> extends ArgumentParser<T | undefined> {
   }
 
   parse(reader: TokenReader): ParseResult<T | undefined> {
+    if (reader.peek() === undefined) {
+      return this.success(undefined);
+    }
+
     const position = reader.save();
 
     const result = this.inner.parse(reader);
@@ -205,10 +179,7 @@ export class OptionalParser<T> extends ArgumentParser<T | undefined> {
 
     reader.restore(position);
 
-    return {
-      success: true,
-      value: undefined,
-    };
+    return this.success(undefined);
   }
 }
 
