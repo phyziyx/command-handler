@@ -5,12 +5,10 @@
  *
  * Date: 09 August 2026 20:44:00
  *
+ * - Exceptions for fatal/unrecoverable errors.
+ * - Result pattern for gracefully recoverable errors.
+ *
  * TODO:
- * - Keep using Exceptions/Errors as the main way to handle errors
- * in the command handler? OR Start using the Result pattern for error
- * handling in the command handler?
- * - Add support for command argument parsing and validation, which can be used
- * for adding different argument types and validation rules for commands.
  * - Add support for command context, which can be passed to the command handler.
  * - Add support for command middleware, which can be used to add pre and post processing
  * logic to commands.
@@ -48,14 +46,15 @@ export {
   type ITypedCommand,
   type ITypedCommandRegistry,
   type InferSchema,
+  type ParseResult,
+  type Schema,
   parseSchema,
+  BooleanParser,
   NumberParser,
   OptionalParser,
-  type ParseResult,
   RestParser,
   StringParser,
   TokenReader,
-  type Schema,
   TypedCommandRegistry,
 } from "./src/typed.ts";
 

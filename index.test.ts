@@ -19,10 +19,15 @@ import {
   TypedCommandRegistry,
 } from "./index.ts";
 import {
+  BooleanParser,
   DefaultSyntaxGenerator,
   OptionalParser,
   StringParser,
 } from "./src/typed.ts";
+import {
+  CommandDoesNotExistError,
+  InvalidCommandArgumentSchema,
+} from "./src/errors.ts";
 
 export class SlashCommandRegistry extends RawCommandRegistry {
   constructor() {
@@ -346,6 +351,70 @@ test("SyntaxGenerator", (t) => {
   });
 });
 
+test("BooleanParser", (t) => {
+  t.test("test number parser", (ctx: TestContext) => {
+    const booleanParser = new BooleanParser();
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader([""])),
+      { success: false, error: "Expected boolean." },
+      "BooleanParser should correctly fail when no argument is provided",
+    );
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["   "])),
+      { success: false, error: "Expected boolean." },
+      "BooleanParser should correctly fail when whitespace is provided",
+    );
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["true"])),
+      { success: true, value: true },
+      "BooleanParser should correctly parse a valid true value within the specified range",
+    );
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["false"])),
+      { success: true, value: false },
+      "BooleanParser should correctly parse a valid false value within the specified range",
+    );
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["0"])),
+      { success: true, value: false },
+      "BooleanParser should correctly parse zero as false",
+    );
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["1"])),
+      { success: true, value: true },
+      "BooleanParser should correctly parse one as true",
+    );
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["5.5"])),
+      { success: false, error: `'5.5' is not a valid boolean.` },
+      "BooleanParser should fail to parse any value outside the specified range",
+    );
+  });
+
+  t.test("test number parser with custom values", (ctx: TestContext) => {
+    const booleanParser = new BooleanParser(["ja"], ["nein"]);
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["ja"])),
+      { success: true, value: true },
+      "BooleanParser should correctly parse a custom true value within the specified range",
+    );
+
+    ctx.assert.deepStrictEqual(
+      booleanParser.parse(new TokenReader(["nein"])),
+      { success: true, value: false },
+      "BooleanParser should correctly parse a custom false value within the specified range",
+    );
+  });
+});
+
 test("NumberParser", (t) => {
   t.test("test number parser", (ctx: TestContext) => {
     const numberParser = new NumberParser();
@@ -522,6 +591,32 @@ test("OptionalParser", (t) => {
     );
   });
 
+  t.test(
+    "test optional parser with no provided value for number parser",
+    (ctx: TestContext) => {
+      const optionalParser = new OptionalParser(new NumberParser());
+
+      ctx.assert.deepStrictEqual(
+        optionalParser.parse(new TokenReader([])),
+        { success: true, value: undefined },
+        "OptionalParser should correctly return undefined when no value is provided for number parser",
+      );
+    },
+  );
+
+  t.test(
+    "test optional parser with no provided value for player parser",
+    (ctx: TestContext) => {
+      const optionalParser = new OptionalParser(new PlayerParser());
+
+      ctx.assert.deepStrictEqual(
+        optionalParser.parse(new TokenReader([])),
+        { success: true, value: undefined },
+        "OptionalParser should correctly return undefined when no value is provided for player parser",
+      );
+    },
+  );
+
   t.test("test optional parser with no provided value", (ctx: TestContext) => {
     const optionalParser = new OptionalParser(new StringParser());
 
@@ -611,40 +706,68 @@ test("TypedCommandRegistry", (t) => {
     },
   );
 
-  // TODO: complete this test implementation
+  t.test(
+    "add a command with incorrect argument order and ensure it fails",
+    (ctx: TestContext) => {
+      let player: null | MockPlayer = null;
+      let message: null | string = null;
 
-  // t.test(
-  //   "add a command with incorrect argument order and ensure it fails",
-  //   (ctx: TestContext) => {
-  //     let called = false;
+      ctx.assert.throws(
+        () => {
+          typedCommandRegistry.addCommand({
+            name: "invalidargorder",
+            args: {
+              message: new RestParser(),
+              player: new PlayerParser(),
+            },
+            description: "A command with invalid argument order",
+            handler: (args) => {
+              player = args.player;
+              message = args.message;
+            },
+          });
+        },
+        InvalidCommandArgumentSchema,
+        "Adding a command with invalid argument order should throw InvalidCommandArgumentSchema error",
+      );
 
-  //     let player: null | MockPlayer = null;
-  //     let message: null | string = null;
+      ctx.assert.throws(
+        () =>
+          typedCommandRegistry.parseCommandLine(
+            "!invalidargorder AliceT Hello there!",
+          ),
+        CommandDoesNotExistError,
+        "The 'invalidargorder' command should be not parsed as it does not exist",
+      );
+    },
+  );
 
-  //     ctx.assert.doesNotThrow(() => {
-  //       typedCommandRegistry.addCommand({
-  //         name: "invalidargorder",
-  //         args: {
-  //           message: new RestParser(),
-  //           player: new PlayerParser(),
-  //         },
-  //         description: "A command with invalid argument order",
-  //         handler: (args) => {
-  //           player = args.player;
-  //           message = args.message;
+  t.test(
+    "add a command with incorrect argument order and ensure it fails",
+    (ctx: TestContext) => {
+      let player: null | MockPlayer = null;
+      let message: undefined | null | string = null;
 
-  //           called = false;
-  //         },
-  //       });
-  //     });
-
-  //     ctx.assert.throws(() => {
-  //       typedCommandRegistry.parseCommandLine(
-  //         "!invalidargorder AliceT Hello there!",
-  //       );
-  //     }, "The 'invalidargorder' command should fail to parse due to incorrect argument order");
-  //   },
-  // );
+      ctx.assert.throws(
+        () => {
+          typedCommandRegistry.addCommand({
+            name: "invalidargorder",
+            args: {
+              message: new OptionalParser(new RestParser()),
+              player: new PlayerParser(),
+            },
+            description: "A command with invalid argument order",
+            handler: (args) => {
+              player = args.player;
+              message = args.message;
+            },
+          });
+        },
+        InvalidCommandArgumentSchema,
+        "Adding a command with invalid argument order should throw InvalidCommandArgumentSchema error",
+      );
+    },
+  );
 
   t.test(
     "add a command with a player and rest parser and ensure correct arguments are received",

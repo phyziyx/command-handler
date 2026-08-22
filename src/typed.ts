@@ -1,3 +1,4 @@
+import { InvalidCommandArgumentSchema } from "./errors.ts";
 import { type IRawCommandRegistry, RawCommandRegistry } from "./raw.ts";
 import type { CommandArg, CommandName, CommandPrefix } from "./types.ts";
 
@@ -66,6 +67,42 @@ export class TokenReader {
 
   public restore(position: number): void {
     this.index = position;
+  }
+}
+
+export class BooleanParser extends ArgumentParser<boolean> {
+  usage = "<boolean>";
+
+  private readonly trueValues: string[] = ["true", "yes", "1", "on"];
+  private readonly falseValues: string[] = ["false", "no", "0", "off"];
+
+  constructor(trueValues?: string[], falseValues?: string[]) {
+    super();
+
+    if (trueValues !== undefined && trueValues.length > 0) {
+      this.trueValues = trueValues;
+    }
+
+    if (falseValues !== undefined && falseValues.length > 0) {
+      this.falseValues = falseValues;
+    }
+  }
+
+  parse(reader: TokenReader): ParseResult<boolean> {
+    const token = reader.read()?.trim().toLowerCase();
+
+    if (!token) {
+      return this.failure("Expected boolean.");
+    }
+
+    const value =
+      this.trueValues.includes(token) ? true
+      : this.falseValues.includes(token) ? false
+      : undefined;
+
+    return value !== undefined ?
+        this.success(value)
+      : this.failure(`'${token}' is not a valid boolean.`);
   }
 }
 
@@ -308,6 +345,23 @@ export class TypedCommandRegistry implements ITypedCommandRegistry {
     return this.rawRegistry.sanitiseCommandName(commandName);
   }
 
+  private validateSchema<S extends Schema>(
+    commandName: string,
+    schema: S,
+  ): void {
+    let encounteredOptionalOrRest = false;
+
+    for (const key of Object.keys(schema)) {
+      const parser = schema[key];
+
+      if (parser instanceof RestParser || parser instanceof OptionalParser) {
+        encounteredOptionalOrRest = true;
+      } else if (encounteredOptionalOrRest) {
+        throw new InvalidCommandArgumentSchema(commandName, key);
+      }
+    }
+  }
+
   /**
    * Add a command to the registry.
    * @param command
@@ -315,6 +369,8 @@ export class TypedCommandRegistry implements ITypedCommandRegistry {
   public addCommand<S extends Schema | undefined>(
     command: ITypedCommand<S>,
   ): void {
+    this.validateSchema(command.name, command.args ?? {});
+
     this.rawRegistry.addCommand({
       name: command.name,
       aliases: command.aliases,

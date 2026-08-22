@@ -59,3 +59,12 @@ export class UnknownCommandArgumentError extends CommandError {
     this.name = "UnknownCommandArgumentError";
   }
 }
+
+export class InvalidCommandArgumentSchema extends CommandError {
+  constructor(commandName: CommandName, key: string) {
+    super(
+      `Command "${commandName}" argument '${key}' has invalid order (after an optional/rest argument).`,
+    );
+    this.name = "InvalidCommandArgumentSchema";
+  }
+}
